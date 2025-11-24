@@ -123,4 +123,4 @@ dmypy.json
 .pyre/
 
 # Dataset directory
-./icwb2-data/
+icwb2-data/
