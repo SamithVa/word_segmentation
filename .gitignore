@@ -134,3 +134,7 @@ outputs/results/
 
 # vscode settings
 .vscode/
+
+# wandb 
+wandb/
+misc/
