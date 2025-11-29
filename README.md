@@ -16,27 +16,43 @@ The project fulfills the following requirements:
 
 ```
 .
-├── fmm_bmm/                # Traditional Matching Algorithms
-│   └── forward_backward.py # Implementation of FMM, BMM, BiMM
-├── hmm/                    # Statistical Algorithms
-│   └── hmm.py              # Implementation of HMM
-├── transformer_based/      # Deep Learning Algorithms
-│   ├── tranf.py            # Transformer model implementation (Training & Inference)
-│   └── inference.py        # Inference scripts
-├── icwb2-data/             # SIGHAN Bakeoff 2005 Dataset
-│   ├── gold/               # Gold standard segmentations
-│   ├── training/           # Training data
-│   └── testing/            # Test data
-├── ui_gradio.py            # Gradio Web UI Application
-├── comparison_result.md    # Detailed performance comparison report
-├── plot_analysis.py        # Analysis and plotting scripts
-├── requirements.txt        # Python dependencies
-└── README.md               # Project documentation
+├── config.py                      # Configuration file with all settings
+├── models/                        # Model implementations
+│   ├── hmm_tokenizer.py          # HMM implementation
+│   ├── classical.py               # FMM, BMM, BiMM implementations
+│   ├── rnn_model.py               # RNN model
+│   ├── lstm_model.py              # LSTM model
+│   ├── transformer_model.py       # Transformer model
+│   └── crf_model.py              # CRF model
+├── scripts/                       # Training and evaluation scripts
+│   ├── hmm.py                    # Train and evaluate HMM model
+│   ├── test_classical.py         # Test and evaluate classical methods
+│   ├── train_rnn.py              # Train RNN model
+│   ├── train_lstm.py             # Train LSTM model
+│   ├── train_transformer.py      # Train Transformer model
+│   └── test_models.py           # Test all models
+├── utils/                         # Shared utilities
+│   ├── dataset.py                # Dataset helper functions
+│   ├── evaluation.py             # Segmentation metrics
+│   └── visualization.py          # Plotting functions
+├── outputs/                       # Generated outputs
+│   ├── saved_models/              # Trained model weights
+│   └── results/                  # Evaluation results
+├── ui_gradio.py                   # Gradio Web UI
+├── requirements.txt               # Python dependencies
+└── README.md                      # This file
 ```
+
+### Architecture Benefits
+- **Simplicity**: Clean, flat structure that's easy to navigate
+- **Modularity**: Each model is self-contained in its own file
+- **Reusability**: Shared utilities reduce code duplication
+- **Consistency**: Standardized configuration through `config.py`
+- **Easy to Extend**: Add new models by simply adding a new file to `models/`
 
 ## 🛠️ Installation
 
-1.  **Clone the repository** (if applicable) or navigate to the project directory.
+1.  **Navigate to the project directory** (or clone if applicable).
 
 2.  **Install Dependencies**:
     Ensure you have Python 3.8+ installed. Install the required packages using pip:
@@ -56,45 +72,56 @@ python ui_gradio.py
 ```
 This will launch a local web server (usually at `http://127.0.0.1:7860`). You can input Chinese sentences and see segmentation results from FMM, HMM, and Transformer models side-by-side.
 
-### 2. Traditional Algorithms (FMM/BMM/BiMM)
-To run and evaluate the rule-based algorithms:
+### 2. Train Individual Models
+
+#### HMM Model
+```bash
+python scripts/hmm.py
+```
+
+#### RNN Model
+```bash
+python scripts/train_rnn.py
+```
+
+#### LSTM Model
+```bash
+python scripts/train_lstm.py
+```
+
+#### Transformer Model
+```bash
+python scripts/train_transformer.py
+```
+
+**Note**: Training neural models (RNN, LSTM, Transformer) requires significant computational resources. A GPU is recommended.
+
+### 3. Test All Models
+To quickly test all models:
 
 ```bash
-cd fmm_bmm
-python forward_backward.py
+python scripts/test_models.py
 ```
-This script will:
-- Load dictionaries from the training data.
-- Test on example sentences.
-- Evaluate F1 scores on all test datasets.
 
-### 3. Hidden Markov Model (HMM)
-To train and evaluate the HMM model:
+### 4. Using Models in Code
 
-```bash
-cd hmm
-python hmm.py
+```python
+from models import HMMTokenizer, FMM, BMM, BiMM
+from config import DATASETS
+
+# Initialize and load HMM
+hmm = HMMTokenizer()
+hmm.load('outputs/saved_models/hmm/model.pkl')
+
+# Initialize classical methods with dictionary
+fmm = FMM()
+fmm.load_dict(DATASETS['pku']['train'])
+
+# Segment text
+text = "即将来临时"
+result = hmm.tokenize(text)
+print(f"HMM: {' / '.join(result)}")
 ```
-This script will:
-- Train the HMM parameters (Start, Transition, Emission probabilities) using the training data.
-- Save the model to `hmm_model.pkl`.
-- Evaluate performance on test datasets.
-
-### 4. Transformer Model
-To train the Transformer model from scratch:
-
-```bash
-cd transformer_based
-python tranf.py
-```
-This script will:
-- Build vocabulary from training data.
-- Train a Transformer encoder model for BMES sequence tagging.
-- Save the best model to `transformer_seg_best.pth`.
-- Generate training loss/accuracy plots.
-- Evaluate on test datasets.
-
-**Note**: Training a Transformer requires significant computational resources. A GPU is recommended.
 
 ## 📊 Performance Comparison
 
@@ -107,12 +134,39 @@ We evaluated the algorithms on four standard datasets from SIGHAN Bakeoff 2005. 
 | **HMM**   | 0.7772        | 0.7816     | 0.7793 |
 | **Transformer** | 0.6685  | 0.7928     | 0.7253 |
 
-*See `comparison_result.md` for detailed breakdown by dataset.*
+*See `result_comparison.md` for detailed breakdown by dataset.*
 
 ### Analysis
 - **FMM/BMM**: Achieved the best performance (~87% F1). This indicates that for this specific dataset, a comprehensive dictionary and greedy matching strategy are very effective. BMM slightly outperformed FMM.
 - **HMM**: Performed moderately (~78% F1). While it can handle some unknown words better than dictionary methods, the simple statistical assumptions limit its accuracy compared to the strong baseline of maximum matching with a good dictionary.
 - **Transformer**: The current implementation achieved ~72% F1. This lower score (compared to SOTA) is likely due to training from scratch on a relatively small dataset without pre-trained embeddings (like BERT) and limited training epochs.
+
+## 🔧 Adding New Models
+
+To add a new segmentation model to the project:
+
+1. Create a new file in `models/` directory (e.g., `new_model.py`)
+2. Implement your model class with `train()` and `tokenize()` methods
+3. Add your model to `models/__init__.py`
+4. Create a training script in `scripts/` directory
+5. Update configuration in `config.py` if needed
+
+Example:
+```python
+# models/new_model.py
+class NewModelTokenizer:
+    def __init__(self, param1, param2):
+        self.param1 = param1
+        self.param2 = param2
+
+    def train(self, data):
+        # Training logic
+        pass
+
+    def tokenize(self, text):
+        # Tokenization logic
+        pass
+```
 
 ## 📝 References
 - SIGHAN Bakeoff 2005 Dataset
