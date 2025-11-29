@@ -52,10 +52,14 @@ TRAINING_CONFIG = {
     'learning_rate': 0.001,
     'epochs': 50,
     'gradient_clip': 5.0,
-    'device': 'cuda',  # Will be updated in each script based on availability
+    'device': 'cuda',
     'max_len': 512, 
     'scheduler_step_size': 10,
-    'scheduler_gamma': 0.1
+    'scheduler_gamma': 0.1,
+    'val_split': 0.1,
+    'early_stopping_patience': 5,
+    'use_wandb': True,           # Enable wandb logging
+    'wandb_project': 'chinese-word-segmentation'
 }
 
 # Model-specific configurations - Fair comparison with consistent embedding dimensions
