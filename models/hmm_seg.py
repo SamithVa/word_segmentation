@@ -89,7 +89,7 @@ class HMMSeg:
                             prev_idx = self.state_map[tags[i-1]]
                             self.A[prev_idx, tag_idx] += 1
 
-        self._normalize()
+        self._normalize() 
         self.trained = True
         print(f"Training complete. Vocabulary size: {len(self.B)}")
 
