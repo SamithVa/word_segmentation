@@ -171,47 +171,30 @@ def train_neural_model(model_type):
         collate_fn=collate_fn, num_workers=0
     )
 
-    # Initialize model based on type
+    # Initialize model
     print(f"\nInitializing {model_type.upper()} model...")
     common_params = {'vocab_size': vocab_size, 'num_classes': len(tag2idx)}
 
     if model_type == 'transformer':
-        model = model_class(
-            **common_params,
-            d_model=config['d_model'],
-            nhead=config['nhead'],
-            num_layers=config['num_layers'],
-            dropout=config['dropout']
-        )
+        model = model_class(**common_params, **config)
     elif model_type == 'rnn':
-        model = model_class(
-            **common_params,
-            d_model=config['d_model'],
-            hidden_dim=config['hidden_dim'],
-            num_layers=config['num_layers']
-        )
+        model = model_class(**common_params, d_model=config['d_model'], 
+                           hidden_dim=config['hidden_dim'], num_layers=config['num_layers'])
     else:  # lstm
-        model = model_class(
-            **common_params,
-            embedding_dim=config['embedding_dim'],
-            hidden_dim=config['hidden_dim'],
-            num_layers=config['num_layers'],
-            dropout=config['dropout']
-        )
+        model = model_class(**common_params, embedding_dim=config['embedding_dim'],
+                           hidden_dim=config['hidden_dim'], num_layers=config['num_layers'],
+                           dropout=config['dropout'])
 
     model = model.to(device)
-    param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Model parameters: {param_count:,}")
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
     # Training setup
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer,
-        step_size=TRAINING_CONFIG['scheduler_step_size'],
+        optimizer, step_size=TRAINING_CONFIG['scheduler_step_size'],
         gamma=TRAINING_CONFIG['scheduler_gamma']
     )
-
     # Train model
     print("\nStarting training...")
     train_losses, train_accuracies = train_model(

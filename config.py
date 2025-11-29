@@ -48,9 +48,9 @@ UNK_TOKEN = '<UNK>'
 
 # Training configuration - Shared across all models
 TRAINING_CONFIG = {
-    'batch_size': 512,
+    'batch_size': 128,
     'learning_rate': 0.001,
-    'epochs': 10,
+    'epochs': 50,
     'gradient_clip': 5.0,
     'device': 'cuda',  # Will be updated in each script based on availability
     'max_len': 512, 
@@ -73,14 +73,14 @@ RNN_CONFIG = {
 
 LSTM_CONFIG = {
     'embedding_dim': SHARED_EMBEDDING_DIM,  # Embedding dimension
-    'hidden_dim': SHARED_HIDDEN_DIM,        # Hidden state dimension
+    'hidden_dim': 128,                      # Reduced from 256 to ~1.65M params 
     'num_layers': SHARED_NUM_LAYERS,
     'dropout': SHARED_DROPOUT
 }
 
 TRANSFORMER_CONFIG = {
-    'd_model': SHARED_EMBEDDING_DIM,      # Embedding dimension
-    'nhead': 4,                            # Number of attention heads (d_model should be divisible by nhead)
+    'd_model': SHARED_EMBEDDING_DIM,
+    'nhead': 4,
     'num_layers': SHARED_NUM_LAYERS,
     'dropout': SHARED_DROPOUT
 }
