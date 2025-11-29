@@ -11,12 +11,15 @@ Usage:
 """
 
 import argparse
-import torch
 import pickle
 import sys
 import os
-import thulac
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Dict, List
 
+import torch
+import thulac
 
 # Add parent directory to path to import utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,210 +28,379 @@ from config import DATASETS, SAVED_MODELS_DIR
 from utils import BaseTokenizer, evaluate_model_on_all_datasets
 
 
-def load_classical_model(model_type):
-    """Load classical models (FMM, BMM, BiMM)."""
-    from models.classical import FMM, BMM, BiMM
-    from config import DATASETS
+# =============================================================================
+# Segmenter Interface & Wrappers
+# =============================================================================
 
-    # Get training files for dictionary
+class SegmenterInterface(ABC):
+    """Abstract interface that all segmenters must implement."""
+    
+    @abstractmethod
+    def tokenize(self, text: str) -> List[str]:
+        """Segment text into words."""
+        pass
+    
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Return the model name."""
+        pass
+
+
+class ClassicalSegmenter(SegmenterInterface):
+    """Wrapper for classical models (FMM, BMM, BiMM) - they already have tokenize()."""
+    
+    def __init__(self, model, model_name: str):
+        self._model = model
+        self._name = model_name
+    
+    def tokenize(self, text: str) -> List[str]:
+        return self._model.tokenize(text)
+    
+    @property
+    def name(self) -> str:
+        return self._name
+
+
+class HMMSegmenter(SegmenterInterface):
+    """Wrapper for HMM model."""
+    
+    def __init__(self, model):
+        self._model = model
+    
+    def tokenize(self, text: str) -> List[str]:
+        return self._model.tokenize(text)
+    
+    @property
+    def name(self) -> str:
+        return "HMM"
+
+
+class NeuralSegmenter(SegmenterInterface):
+    """Wrapper for neural models (LSTM, RNN, Transformer)."""
+    
+    def __init__(self, model, char2idx: Dict, idx2tag: Dict, device, model_name: str):
+        self._tokenizer = BaseTokenizer(model, char2idx, idx2tag, device)
+        self._name = model_name
+    
+    def tokenize(self, text: str) -> List[str]:
+        return self._tokenizer.tokenize(text)
+    
+    @property
+    def name(self) -> str:
+        return self._name
+
+
+class ThulacSegmenter(SegmenterInterface):
+    """Wrapper for THULAC library."""
+    
+    def __init__(self, model):
+        self._model = model
+    
+    def tokenize(self, text: str) -> List[str]:
+        result = self._model.cut(text)
+        return [word if isinstance(word, str) else word[0] for word in result]
+    
+    @property
+    def name(self) -> str:
+        return "THULAC"
+
+
+# =============================================================================
+# Model Loaders
+# =============================================================================
+
+@dataclass
+class LoadedModel:
+    """Container for loaded model data."""
+    segmenter: SegmenterInterface
+    device: torch.device
+
+
+def _get_device() -> torch.device:
+    """Get the appropriate torch device."""
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def _get_training_files() -> List[str]:
+    """Get list of existing training files for dictionary-based models."""
     training_files = [dataset['train'] for dataset in DATASETS.values()]
-    existing_files = [f for f in training_files if os.path.exists(f)]
-    print(f"Loading dictionary for {model_type.upper()} from {len(existing_files)} files...")
-
-    # Initialize and load dictionary
-    if model_type == 'bimm':
-        model = BiMM(dict_paths=existing_files)
-        vocab_size = len(model.fmm.vocab)  # BiMM contains FMM and BMM models
-    else:
-        model = FMM() if model_type == 'fmm' else BMM()
-        model.load_dict(existing_files)
-        vocab_size = len(model.vocab)
-
-    print(f"Dictionary loaded with {vocab_size} words for {model_type.upper()}")
-    return model, {}, {}
+    return [f for f in training_files if os.path.exists(f)]
 
 
-def load_neural_model(model_type, device):
-    """Load neural models (LSTM, RNN, Transformer)."""
+def load_fmm() -> LoadedModel:
+    """Load Forward Maximum Matching model."""
+    from models.classical import FMM
+    
+    existing_files = _get_training_files()
+    print(f"Loading dictionary for FMM from {len(existing_files)} files...")
+    
+    model = FMM()
+    model.load_dict(existing_files)
+    print(f"Dictionary loaded with {len(model.vocab)} words for FMM")
+    
+    return LoadedModel(
+        segmenter=ClassicalSegmenter(model, "FMM"),
+        device=_get_device()
+    )
+
+
+def load_bmm() -> LoadedModel:
+    """Load Backward Maximum Matching model."""
+    from models.classical import BMM
+    
+    existing_files = _get_training_files()
+    print(f"Loading dictionary for BMM from {len(existing_files)} files...")
+    
+    model = BMM()
+    model.load_dict(existing_files)
+    print(f"Dictionary loaded with {len(model.vocab)} words for BMM")
+    
+    return LoadedModel(
+        segmenter=ClassicalSegmenter(model, "BMM"),
+        device=_get_device()
+    )
+
+
+def load_bimm() -> LoadedModel:
+    """Load Bidirectional Maximum Matching model."""
+    from models.classical import BiMM
+    
+    existing_files = _get_training_files()
+    print(f"Loading dictionary for BiMM from {len(existing_files)} files...")
+    
+    model = BiMM(dict_paths=existing_files)
+    print(f"Dictionary loaded with {len(model.fmm.vocab)} words for BiMM")
+    
+    return LoadedModel(
+        segmenter=ClassicalSegmenter(model, "BiMM"),
+        device=_get_device()
+    )
+
+
+def load_hmm() -> LoadedModel:
+    """Load HMM model."""
+    from models.hmm_seg import HMMSeg
+    
+    model_path = f'{SAVED_MODELS_DIR}/hmm/hmm_model.pkl'
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"HMM model not found at: {model_path}")
+    
+    model = HMMSeg()
+    model.load_model(model_path)
+    
+    return LoadedModel(
+        segmenter=HMMSegmenter(model),
+        device=_get_device()
+    )
+
+
+def load_thulac() -> LoadedModel:
+    """Load THULAC model."""
+    model = thulac.thulac(seg_only=True)
+    
+    return LoadedModel(
+        segmenter=ThulacSegmenter(model),
+        device=_get_device()
+    )
+
+
+def _load_neural_model(model_type: str) -> LoadedModel:
+    """Load a neural model (LSTM, RNN, or Transformer)."""
     from models.lstm_seg import LSTMSeg
     from models.rnn_seg import RNNSeg
     from models.transformer_seg import TransformerSeg
-    from config import LSTM_CONFIG, RNN_CONFIG, TRANSFORMER_CONFIG, TRAINING_CONFIG
-
-    # Define model configuration mapping
-    model_configs = {
-        'lstm': (LSTMSeg, LSTM_CONFIG, f'{SAVED_MODELS_DIR}/lstm/lstm_seg_best.pth'),
-        'rnn': (RNNSeg, RNN_CONFIG, f'{SAVED_MODELS_DIR}/rnn/rnn_seg_best.pth'),
-        'transformer': (TransformerSeg, TRANSFORMER_CONFIG, f'{SAVED_MODELS_DIR}/transformer/transformer_seg_best.pth')
+    from config import LSTM_CONFIG, RNN_CONFIG, TRANSFORMER_CONFIG
+    
+    device = _get_device()
+    
+    # Model configurations
+    configs = {
+        'lstm': {
+            'class': LSTMSeg,
+            'config': LSTM_CONFIG,
+            'path': f'{SAVED_MODELS_DIR}/lstm/lstm_seg_best.pth',
+            'init_fn': lambda cls, cfg, vocab_size, num_classes: cls(
+                vocab_size=vocab_size,
+                embedding_dim=cfg['embedding_dim'],
+                hidden_dim=cfg['hidden_dim'],
+                num_layers=cfg['num_layers'],
+                num_classes=num_classes,
+                dropout=cfg['dropout']
+            )
+        },
+        'rnn': {
+            'class': RNNSeg,
+            'config': RNN_CONFIG,
+            'path': f'{SAVED_MODELS_DIR}/rnn/rnn_seg_best.pth',
+            'init_fn': lambda cls, cfg, vocab_size, num_classes: cls(
+                vocab_size=vocab_size,
+                d_model=cfg['d_model'],
+                hidden_dim=cfg['hidden_dim'],
+                num_layers=cfg['num_layers'],
+                num_classes=num_classes
+            )
+        },
+        'transformer': {
+            'class': TransformerSeg,
+            'config': TRANSFORMER_CONFIG,
+            'path': f'{SAVED_MODELS_DIR}/transformer/transformer_seg_best.pth',
+            'init_fn': lambda cls, cfg, vocab_size, num_classes: cls(
+                vocab_size=vocab_size,
+                d_model=cfg['d_model'],
+                nhead=cfg['nhead'],
+                num_layers=cfg['num_layers'],
+                num_classes=num_classes,
+                dropout=cfg['dropout']
+            )
+        }
     }
-
-    model_class, config, model_path = model_configs[model_type]
-
+    
+    model_cfg = configs[model_type]
+    
     # Load vocabulary
     vocab_path = f'{SAVED_MODELS_DIR}/{model_type}/vocab.pkl'
     with open(vocab_path, 'rb') as f:
         vocab_data = pickle.load(f)
-    char2idx, tag2idx, idx2tag = vocab_data['char2idx'], vocab_data['tag2idx'], vocab_data['idx2tag']
-
-    # Initialize model based on type
-
-    # thulac (library for Chinese word segementation)
-
-    if model_type == 'lstm':
-        model = model_class(
-            vocab_size=len(char2idx),
-            embedding_dim=config['embedding_dim'],
-            hidden_dim=config['hidden_dim'],
-            num_layers=config['num_layers'],
-            num_classes=len(tag2idx),
-            dropout=config['dropout']
-        ).to(device)
-    elif model_type == 'rnn':
-        model = model_class(
-            vocab_size=len(char2idx),
-            d_model=config['d_model'],
-            hidden_dim=config['hidden_dim'],
-            num_layers=config['num_layers'],
-            num_classes=len(tag2idx)
-        ).to(device)
-    else:  # transformer
-        model = model_class(
-            vocab_size=len(char2idx),
-            d_model=config['d_model'],
-            nhead=config['nhead'],
-            num_layers=config['num_layers'],
-            num_classes=len(tag2idx),
-            dropout=config['dropout'],
-        ).to(device)
-
+    char2idx = vocab_data['char2idx']
+    tag2idx = vocab_data['tag2idx']
+    idx2tag = vocab_data['idx2tag']
+    
+    # Initialize model
+    model = model_cfg['init_fn'](
+        model_cfg['class'],
+        model_cfg['config'],
+        len(char2idx),
+        len(tag2idx)
+    ).to(device)
+    
     # Load trained weights
-    checkpoint = torch.load(model_path, map_location=device)
+    checkpoint = torch.load(model_cfg['path'], map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
-
-    return model, char2idx, tag2idx, idx2tag
-
-
-def load_hmm_model():
-    """Load HMM model."""
-    from models.hmm_seg import HMMSeg
-
-    model_path = f'{SAVED_MODELS_DIR}/hmm/hmm_model.pkl'
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"HMM model not found at: {model_path}")
-
-    # Load model and create mappings
-    model = HMMSeg()
-    model.load_model(model_path)
-
-    tag2idx = model.state_map
-    idx2tag = {v: k for k, v in tag2idx.items()}
-    all_chars = list(model.B.keys())
-    char2idx = {char: idx for idx, char in enumerate(all_chars)}
-
-    return model, char2idx, tag2idx, idx2tag
-
-
-def load_thulac_model():
-    """Load THULAC model for Chinese word segmentation."""
     
-    # Initialize THULAC model (default mode: word segmentation)
-    # THULAC API uses thulac.Thulac() class
-    model = thulac.thulac(seg_only=True)
+    return LoadedModel(
+        segmenter=NeuralSegmenter(model, char2idx, idx2tag, device, model_type.upper()),
+        device=device
+    )
+
+
+def load_lstm() -> LoadedModel:
+    """Load LSTM model."""
+    return _load_neural_model('lstm')
+
+
+def load_rnn() -> LoadedModel:
+    """Load RNN model."""
+    return _load_neural_model('rnn')
+
+
+def load_transformer() -> LoadedModel:
+    """Load Transformer model."""
+    return _load_neural_model('transformer')
+
+
+# =============================================================================
+# Model Registry
+# =============================================================================
+
+# Registry mapping model names to their loader functions
+MODEL_REGISTRY = {
+    'fmm': load_fmm,
+    'bmm': load_bmm,
+    'bimm': load_bimm,
+    'hmm': load_hmm,
+    'thulac': load_thulac,
+    'lstm': load_lstm,
+    'rnn': load_rnn,
+    'transformer': load_transformer,
+}
+
+SUPPORTED_MODELS = list(MODEL_REGISTRY.keys())
+
+
+def load_model(model_type: str) -> LoadedModel:
+    """
+    Load a model by type using the registry.
     
-    # THULAC doesn't use vocabulary mappings like neural models
-    # Return empty mappings for compatibility
-    return model, {}, {}, {}
+    Args:
+        model_type: One of the supported model types
+        
+    Returns:
+        LoadedModel containing the segmenter and device
+        
+    Raises:
+        ValueError: If model_type is not supported
+    """
+    if model_type not in MODEL_REGISTRY:
+        raise ValueError(f"Unknown model type: {model_type}. Supported: {SUPPORTED_MODELS}")
+    
+    return MODEL_REGISTRY[model_type]()
 
 
-def load_model_and_vocab(model_type):
-    """Load trained model and vocabulary."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# =============================================================================
+# Evaluation Functions
+# =============================================================================
 
-    if model_type in ['fmm', 'bmm', 'bimm']:
-        model, char2idx, tag2idx = load_classical_model(model_type)
-        idx2tag = {}  # Not used for classical models
-        return model, char2idx, idx2tag, device
-    elif model_type == 'hmm':
-        model, char2idx, tag2idx, idx2tag = load_hmm_model()
-        return model, char2idx, idx2tag, device
-    elif model_type == 'thulac':
-        model, char2idx, tag2idx, idx2tag = load_thulac_model()
-        return model, char2idx, idx2tag, device
-    else:
-        model, char2idx, tag2idx, idx2tag = load_neural_model(model_type, device)
-        return model, char2idx, idx2tag, device
+TEST_SENTENCES = [
+    "研究生命起源",
+    "机器学习是人工智能的重要分支",
+    "自然语言处理技术发展迅速"
+]
 
 
-def test_example_sentences(model, char2idx, idx2tag, device, model_type):
+def test_example_sentences(segmenter: SegmenterInterface) -> None:
     """Test model on example sentences."""
     print(f"\n{'='*60}")
-    print(f"Testing {model_type.upper()} on Example Sentences")
+    print(f"Testing {segmenter.name} on Example Sentences")
     print(f"{'='*60}")
+    
+    for sentence in TEST_SENTENCES:
+        words = segmenter.tokenize(sentence)
+        print(f"{sentence} -> {' / '.join(words)}")
 
-    test_sentences = [
-        "研究生命起源",
-        "机器学习是人工智能的重要分支",
-        "自然语言处理技术发展迅速"
-    ]
 
-    if model_type in ['fmm', 'bmm', 'bimm', 'hmm', 'thulac']:
-        # Classical, HMM, and THULAC models use their native tokenize method
-        for sentence in test_sentences:
-            if model_type == 'thulac':
-                # THULAC returns list of (word, tag) tuples when seg_only=False
-                # or list of words when seg_only=True
-                result = model.cut(sentence)
-                words = [word if isinstance(word, str) else word[0] for word in result]
-            else:
-                words = model.tokenize(sentence)
-            print(f"{sentence} -> {' / '.join(words)}")
-    else:
-        # Neural models use BaseTokenizer
-        tokenizer = BaseTokenizer(model, char2idx, idx2tag, device)
-        for sentence in test_sentences:
-            words = tokenizer.tokenize(sentence)
-            print(f"{sentence} -> {' / '.join(words)}")
+def evaluate_model(model_type: str) -> None:
+    """
+    Evaluate a single model.
+    
+    Args:
+        model_type: The type of model to evaluate
+    """
+    print(f"\nEvaluating {model_type.upper()} model...")
+    
+    # Load model (unified interface)
+    loaded = load_model(model_type)
+    
+    # Test on example sentences
+    test_example_sentences(loaded.segmenter)
+    
+    # Evaluate on all test datasets
+    # The segmenter already has .tokenize() method
+    evaluate_model_on_all_datasets(
+        loaded.segmenter, 
+        DATASETS, 
+        f"{model_type.upper()}_segmentation"
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(description='Evaluate trained word segmentation models')
-    parser.add_argument('--model', type=str, required=True,
-                       choices=['lstm', 'rnn', 'transformer', 'hmm', 'fmm', 'bmm', 'bimm', 'thulac', 'all'],
-                       help='Model type to evaluate')
+    parser.add_argument(
+        '--model', 
+        type=str, 
+        required=True,
+        choices=SUPPORTED_MODELS + ['all'],
+        help='Model type to evaluate'
+    )
     args = parser.parse_args()
-
-    models = ['lstm', 'rnn', 'transformer', 'hmm', 'fmm', 'bmm', 'bimm', 'thulac'] if args.model == 'all' else [args.model]
-
-    for model_type in models:
+    
+    # Determine which models to evaluate
+    models_to_eval = SUPPORTED_MODELS if args.model == 'all' else [args.model]
+    
+    for model_type in models_to_eval:
         try:
-            print(f"\nEvaluating {model_type.upper()} model...")
-
-            # Load model and vocabulary
-            model, char2idx, idx2tag, device = load_model_and_vocab(model_type)
-
-            # Test on example sentences
-            test_example_sentences(model, char2idx, idx2tag, device, model_type)
-
-            # Evaluate on all test datasets
-            if model_type in ['fmm', 'bmm', 'bimm', 'hmm']:
-                tokenizer = model
-            elif model_type == 'thulac':
-                # Create a wrapper for THULAC to match the expected interface
-                class ThulacWrapper:
-                    def __init__(self, thulac_model):
-                        self.thulac_model = thulac_model
-                    
-                    def tokenize(self, text):
-                        result = self.thulac_model.cut(text)
-                        return [word if isinstance(word, str) else word[0] for word in result]
-                
-                tokenizer = ThulacWrapper(model)
-            else:
-                tokenizer = BaseTokenizer(model, char2idx, idx2tag, device)
-            
-            evaluate_model_on_all_datasets(tokenizer, DATASETS, f"{model_type.upper()}_segmentation")
-
+            evaluate_model(model_type)
         except Exception as e:
             print(f"Error evaluating {model_type}: {e}")
             continue
