@@ -46,19 +46,16 @@ ENG_TOKEN = '<ENG>'
 PAD_TOKEN = '<PAD>'
 UNK_TOKEN = '<UNK>'
 
-# Training configuration - Shared across all models
+# Training configuration
 TRAINING_CONFIG = {
     'batch_size': 128,
     'learning_rate': 0.001,
     'epochs': 50,
-    'gradient_clip': 5.0,
-    'device': 'cuda',
     'max_len': 512, 
     'scheduler_step_size': 10,
     'scheduler_gamma': 0.1,
     'val_split': 0.1,
-    'early_stopping_patience': 5,
-    'use_wandb': True,           # Enable wandb logging
+    'use_wandb': True,
     'wandb_project': 'chinese-word-segmentation'
 }
 
@@ -93,8 +90,6 @@ TRANSFORMER_CONFIG = {
 BATCH_SIZE = TRAINING_CONFIG['batch_size']
 LEARNING_RATE = TRAINING_CONFIG['learning_rate']
 EPOCHS = TRAINING_CONFIG['epochs']
-GRADIENT_CLIP = TRAINING_CONFIG['gradient_clip']
-DEVICE = TRAINING_CONFIG['device']
 MAX_LEN = TRAINING_CONFIG['max_len']
 
 # Evaluation

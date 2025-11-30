@@ -276,7 +276,7 @@ def _load_neural_model(model_type: str) -> LoadedModel:
     
     # Load trained weights
     checkpoint = torch.load(model_cfg['path'], map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model.load_state_dict(checkpoint)
     model.eval()
     
     return LoadedModel(

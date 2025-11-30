@@ -102,8 +102,8 @@ def train_neural(model_type):
         except ImportError:
             use_wandb = False
 
-    train_model(model, train_loader, criterion, optimizer, scheduler, device, TRAINING_CONFIG['epochs'], 
-                model_path, val_loader, TRAINING_CONFIG.get('early_stopping_patience', 5), use_wandb)
+    train_model(model, train_loader, criterion, optimizer, scheduler, device,
+                TRAINING_CONFIG['epochs'], model_path, val_loader, use_wandb)
 
     if use_wandb:
         import wandb
