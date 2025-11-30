@@ -10,7 +10,7 @@ tabulate>=0.8.9
 gradio>=4.0.0
 
 # Machine Learning
-sklearn-crfsuite>=0.3.6  # For CRF model
+scikit-learn>=1.0.0
 
 # Evaluation comparison (optional)
 thulac>=0.2.2  # For baseline comparison
@@ -18,7 +18,4 @@ thulac>=0.2.2  # For baseline comparison
 # Experiment tracking (optional)
 wandb>=0.15.0
 
-# Development (optional)
-# pytest>=7.0.0
-# black>=22.0.0
-# mypy>=0.950
+

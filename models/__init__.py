@@ -16,14 +16,6 @@ except ImportError:
     LSTMTokenizer = None
     TransformerTokenizer = None
 
-# Optional CRF model (requires sklearn-crfsuite)
-try:
-    from .crf_seg import CRFSeg as CRFModel
-    CRF_AVAILABLE = True
-except ImportError:
-    CRF_AVAILABLE = False
-    CRFModel = None
-
 __all__ = [
     'HMMTokenizer',
     'FMM',
@@ -32,7 +24,5 @@ __all__ = [
     'RNNTokenizer',
     'LSTMTokenizer',
     'TransformerTokenizer',
-    'CRFModel',
     'NEURAL_MODELS',
-    'CRF_AVAILABLE'
 ]

@@ -30,17 +30,6 @@ def train_hmm():
     print(f"HMM model saved to {model_path}")
 
 
-def train_crf():
-    from models.crf_seg import CRFSeg
-    model_path = f'{SAVED_MODELS_DIR}/crf/crf_model.pkl'
-    os.makedirs(os.path.dirname(model_path), exist_ok=True)
-    
-    crf = CRFSeg()
-    crf.train(get_training_files())
-    crf.save_model(model_path)
-    print(f"CRF model saved to {model_path}")
-
-
 def train_neural(model_type):
     import torch
     import torch.nn as nn
@@ -114,10 +103,10 @@ def train_neural(model_type):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', required=True, choices=['hmm', 'crf', 'rnn', 'lstm', 'transformer'])
+    parser.add_argument('--model', required=True, choices=['hmm', 'rnn', 'lstm', 'transformer'])
     args = parser.parse_args()
 
-    {'hmm': train_hmm, 'crf': train_crf, 'rnn': lambda: train_neural('rnn'), 
+    {'hmm': train_hmm, 'rnn': lambda: train_neural('rnn'), 
      'lstm': lambda: train_neural('lstm'), 'transformer': lambda: train_neural('transformer')}[args.model]()
 
 
