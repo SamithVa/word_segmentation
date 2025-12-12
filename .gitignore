@@ -92,8 +92,9 @@ wandb/
 !outputs/saved_models/.gitkeep
 !outputs/results/.gitkeep
 
-# Data files (large)
+# Data files (large), archives, and datasets
 icwb2-data/
+*.zip
 
 # Logs
 *.log
@@ -102,3 +103,4 @@ logs/
 
 # miscellaneous
 misc/
+

@@ -10,6 +10,10 @@ A comparison of Chinese word segmentation algorithms, from classical rule-based 
 - **External**: THULAC library integration
 - **Interactive UI**: Gradio web interface for real-time comparison
 
+## UI Demo 
+
+![Demo](demo.gif)
+
 ## Quick Start
 
 ```bash
